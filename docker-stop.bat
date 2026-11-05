@@ -1,6 +1,6 @@
 @echo off
 echo ===================================================
-echo   Parando ZappSignage no Docker...
+echo   Parando Gerenciador de Telas no Docker...
 echo ===================================================
 
 docker compose down

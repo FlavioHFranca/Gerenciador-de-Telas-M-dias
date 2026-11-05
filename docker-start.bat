@@ -1,6 +1,6 @@
 @echo off
 echo ===================================================
-echo   Iniciando ZappSignage no Docker...
+echo   Iniciando Gerenciador de Telas no Docker...
 echo ===================================================
 
 docker compose up -d --build
@@ -15,7 +15,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo ===================================================
-echo   ZappSignage iniciado com sucesso no Docker!
+echo   Servico iniciado com sucesso no Docker!
 echo   Painel Admin: http://localhost:3000/
 echo   Player:       http://localhost:3000/player
 echo ===================================================

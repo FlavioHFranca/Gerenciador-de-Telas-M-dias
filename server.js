@@ -434,7 +434,7 @@ app.use((err, req, res, next) => {
 
 server.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`🚀 ZappSignage rodando em http://localhost:${PORT}`);
+  console.log(`🚀 Gerenciador de Telas rodando em http://localhost:${PORT}`);
   console.log(`📺 Rota 1 (Painel Admin): http://localhost:${PORT}/`);
   console.log(`🎬 Rota 2 (Player Fullscreen): http://localhost:${PORT}/player`);
   console.log(`====================================================`);

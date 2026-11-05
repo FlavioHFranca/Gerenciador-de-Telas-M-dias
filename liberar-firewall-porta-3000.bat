@@ -15,7 +15,7 @@ if %errorLevel% neq 0 (
     exit /b 1
 )
 
-netsh advfirewall firewall add rule name="ZappSignage (Porta 3000)" dir=in action=allow protocol=TCP localport=3000
+netsh advfirewall firewall add rule name="Display Signage (Porta 3000)" dir=in action=allow protocol=TCP localport=3000
 
 echo.
 echo ========================================================
