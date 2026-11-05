@@ -1,13 +1,14 @@
 {
-  "name": "zappsignage",
+  "name": "display-manager",
   "version": "1.0.0",
-  "description": "",
+  "description": "Plataforma Web de Sinalização Digital (Digital Signage)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
+    "sync:docs": "node -e \"require('fs').cpSync('public', 'docs', { recursive: true })\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

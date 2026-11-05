@@ -1,0 +1,76 @@
+/* Estilos do Player Fullscreen ZappSignage */
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #000;
+}
+
+/* Duas camadas para crossfade suave */
+.media-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease-in-out;
+  background-color: #000;
+  z-index: 10;
+}
+
+.media-layer.active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 20;
+}
+
+/* Elementos de mídia dentro da camada */
+.media-layer img,
+.media-layer video {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Modo de proporção / orientação */
+.contain-mode img,
+.contain-mode video {
+  object-fit: contain;
+}
+
+.cover-mode img,
+.cover-mode video {
+  object-fit: cover;
+}
+
+/* Modos de Orientação Específicos */
+/* Se a tela configurada for vertical (1080x1920) e o display físico for horizontal,
+   o player preserva a proporção vertical centralizada com black bars laterais limpas */
+.orientation-vertical #signageViewport {
+  background-color: #000;
+}
+
+/* Cursor escondido após inatividade */
+body.hide-cursor {
+  cursor: none !important;
+}
+
+body.hide-cursor #playerControlBar {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Efeito de pulse sutil */
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.pulse-subtle {
+  animation: pulseSubtle 3s infinite;
+}

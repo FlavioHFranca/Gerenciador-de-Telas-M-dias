@@ -1,6 +1,13 @@
-// Painel Administrativo ZappSignage (Rota 1)
-document.addEventListener('DOMContentLoaded', () => {
-  const socket = io();
+// Painel Administrativo Display Manager (Rota 1)
+document.addEventListener('DOMContentLoaded', async () => {
+  let socket = null;
+  try {
+    if (typeof io !== 'undefined' && !window.DisplayStorage?.isGitHubPages) {
+      socket = io({ credentials: false, autoConnect: true });
+    }
+  } catch (e) {
+    console.warn('Socket.io não conectado; utilizando modo de armazenamento cliente/GitHub Pages.');
+  }
 
   // Elementos do DOM
   const screenSelect = document.getElementById('screenSelect');
@@ -65,6 +72,28 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentScreen = null;
   let activeOrientation = 'horizontal';
 
+  // Cache de ObjectURLs locais para mídias
+  const objectUrlCache = new Map();
+
+  async function getMediaSourceUrl(item) {
+    if (item.dataUrl) return item.dataUrl;
+    if (item.blobUrl) return item.blobUrl;
+    if (objectUrlCache.has(item.id)) return objectUrlCache.get(item.id);
+
+    // Se estiver no IndexedDB
+    if (window.DisplayStorage) {
+      const blob = await window.DisplayStorage.getMediaBlob(item.id);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        objectUrlCache.set(item.id, url);
+        return url;
+      }
+    }
+
+    // Servidor local uploads
+    return `./uploads/${item.filename}`;
+  }
+
   // ================= NOTIFICAÇÕES TOAST =================
   function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
@@ -87,8 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ================= CARREGAMENTO DE TELAS =================
   async function loadScreens(selectCode = null) {
     try {
-      const res = await fetch('/api/screens');
-      screens = await res.json();
+      screens = await window.DisplayStorage.getScreens();
 
       screenSelect.innerHTML = '';
       screens.forEach(screen => {
@@ -107,18 +135,23 @@ document.addEventListener('DOMContentLoaded', () => {
           const found = screens.find(s => s.code.toUpperCase() === currentScreen.code.toUpperCase());
           if (found) target = found;
         }
-        selectScreen(target.code);
+        await selectScreen(target.code);
       }
       
-      // Solicita status dos players conectados via socket
-      socket.emit('get-active-players');
+      if (socket && socket.connected) {
+        socket.emit('get-active-players');
+      } else {
+        // Modo Client-Side / GitHub Pages
+        playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50';
+        playerStatusText.innerHTML = `<span class="text-emerald-400 font-semibold">ATIVO</span> (Modo Local / Web)`;
+      }
     } catch (err) {
       console.error('Erro ao carregar telas:', err);
-      showToast('Erro ao carregar telas do servidor', 'error');
+      showToast('Erro ao carregar telas', 'error');
     }
   }
 
-  function selectScreen(code) {
+  async function selectScreen(code) {
     const screen = screens.find(s => s.code.toUpperCase() === code.toUpperCase());
     if (!screen) return;
     currentScreen = screen;
@@ -131,8 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadImageDuration.value = screen.defaultImageDuration || 10;
     fitModeSelect.value = screen.fitMode || 'contain';
 
-    // Links para a Rota 2 com o código preenchido
-    const playerUrl = `/player?code=${encodeURIComponent(screen.code)}`;
+    // Links relativos para a Rota 2 com o código preenchido
+    const playerUrl = `./player.html?code=${encodeURIComponent(screen.code)}`;
     btnDirectPlayerLink.href = playerUrl;
     btnOpenPlayerNav.href = playerUrl;
     btnTestInPlayer.href = playerUrl;
@@ -141,10 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setOrientationUI(screen.orientation || 'horizontal');
 
     // Renderiza playlist
-    renderPlaylist(screen.playlist || []);
+    await renderPlaylist(screen.playlist || []);
 
     // Atualiza mockup
-    updateMockupPreview(screen);
+    await updateMockupPreview(screen);
   }
 
   function setOrientationUI(orient) {
@@ -171,20 +204,13 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveConfig.addEventListener('click', async () => {
     if (!currentScreen) return;
     try {
-      const res = await fetch(`/api/screens/${currentScreen.code}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orientation: activeOrientation,
-          fitMode: fitModeSelect.value,
-          defaultImageDuration: Number(defaultDurationInput.value) || 10
-        })
-      });
-      if (!res.ok) throw new Error('Falha ao salvar configurações.');
-      const updated = await res.json();
-      currentScreen = updated;
+      currentScreen.orientation = activeOrientation;
+      currentScreen.fitMode = fitModeSelect.value;
+      currentScreen.defaultImageDuration = Number(defaultDurationInput.value) || 10;
+
+      await window.DisplayStorage.saveScreen(currentScreen);
       showToast('Orientação e configurações salvas com sucesso!');
-      updateMockupPreview(updated);
+      await updateMockupPreview(currentScreen);
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -197,15 +223,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!newName) return showToast('Nome inválido', 'error');
 
     try {
-      const res = await fetch(`/api/screens/${currentScreen.code}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName })
-      });
-      if (!res.ok) throw new Error('Falha ao atualizar nome.');
-      const updated = await res.json();
-      currentScreen.name = updated.name;
-      loadScreens(currentScreen.code);
+      currentScreen.name = newName;
+      await window.DisplayStorage.saveScreen(currentScreen);
+      await loadScreens(currentScreen.code);
       showToast('Nome da tela atualizado!');
     } catch (err) {
       showToast(err.message, 'error');
@@ -253,59 +273,106 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function handleFilesUpload(fileList) {
+  async function handleFilesUpload(fileList) {
     if (!currentScreen) return showToast('Selecione uma tela antes de enviar mídias', 'error');
     const files = Array.from(fileList);
     if (files.length === 0) return;
 
-    const formData = new FormData();
-    files.forEach(file => formData.append('files', file));
-    formData.append('duration', uploadImageDuration.value || 10);
-
-    // Mostra progresso
     uploadProgressContainer.classList.remove('hidden');
     uploadProgressBar.style.width = '0%';
     uploadProgressPercent.textContent = '0%';
-    uploadProgressText.textContent = `Enviando ${files.length} arquivo(s)...`;
+    uploadProgressText.textContent = `Processando ${files.length} arquivo(s)...`;
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/screens/${currentScreen.code}/upload`, true);
+    const serverOk = await window.DisplayStorage.checkServerAvailable();
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
-        uploadProgressBar.style.width = `${percent}%`;
-        uploadProgressPercent.textContent = `${percent}%`;
+    if (serverOk) {
+      // Modo Servidor (Node.js / Docker)
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+      formData.append('duration', uploadImageDuration.value || 10);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `/api/screens/${currentScreen.code}/upload`, true);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          uploadProgressBar.style.width = `${percent}%`;
+          uploadProgressPercent.textContent = `${percent}%`;
+        }
+      };
+
+      xhr.onload = async () => {
+        uploadProgressContainer.classList.add('hidden');
+        fileInput.value = '';
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const response = JSON.parse(xhr.responseText);
+          currentScreen = response.screen;
+          await renderPlaylist(currentScreen.playlist);
+          await updateMockupPreview(currentScreen);
+          showToast(response.message || 'Arquivos enviados com sucesso!');
+        } else {
+          showToast('Erro no envio de arquivos.', 'error');
+        }
+      };
+
+      xhr.onerror = () => {
+        uploadProgressContainer.classList.add('hidden');
+        fileInput.value = '';
+        showToast('Falha na conexão durante o envio.', 'error');
+      };
+
+      xhr.send(formData);
+
+    } else {
+      // Modo Client-Side / GitHub Pages (IndexedDB)
+      try {
+        const customDuration = Number(uploadImageDuration.value) || currentScreen.defaultImageDuration || 10;
+        
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const isVideo = file.type.startsWith('video/') || 
+            ['.mp4', '.webm', '.ogg', '.mov'].some(ext => file.name.toLowerCase().endsWith(ext));
+
+          const mediaId = 'media_' + Date.now() + '_' + Math.round(Math.random() * 10000);
+
+          // Salva o Blob no IndexedDB
+          await window.DisplayStorage.saveMediaBlob(mediaId, file);
+
+          const mediaItem = {
+            id: mediaId,
+            filename: file.name,
+            originalName: file.name,
+            type: isVideo ? 'video' : 'image',
+            mimeType: file.type,
+            size: file.size,
+            duration: isVideo ? 0 : customDuration,
+            order: currentScreen.playlist.length,
+            active: true,
+            createdAt: new Date().toISOString()
+          };
+
+          currentScreen.playlist.push(mediaItem);
+
+          const percent = Math.round(((i + 1) / files.length) * 100);
+          uploadProgressBar.style.width = `${percent}%`;
+          uploadProgressPercent.textContent = `${percent}%`;
+        }
+
+        await window.DisplayStorage.saveScreen(currentScreen);
+        uploadProgressContainer.classList.add('hidden');
+        fileInput.value = '';
+
+        await renderPlaylist(currentScreen.playlist);
+        await updateMockupPreview(currentScreen);
+        showToast(`${files.length} arquivo(s) salvos localmente com sucesso!`);
+      } catch (err) {
+        uploadProgressContainer.classList.add('hidden');
+        fileInput.value = '';
+        showToast('Erro ao salvar arquivos: ' + err.message, 'error');
       }
-    };
-
-    xhr.onload = () => {
-      uploadProgressContainer.classList.add('hidden');
-      fileInput.value = '';
-
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const response = JSON.parse(xhr.responseText);
-        currentScreen = response.screen;
-        renderPlaylist(currentScreen.playlist);
-        updateMockupPreview(currentScreen);
-        showToast(response.message || 'Arquivos enviados com sucesso!');
-      } else {
-        let errMessage = 'Erro no envio de arquivos.';
-        try {
-          const errRes = JSON.parse(xhr.responseText);
-          if (errRes.error) errMessage = errRes.error;
-        } catch (e) {}
-        showToast(errMessage, 'error');
-      }
-    };
-
-    xhr.onerror = () => {
-      uploadProgressContainer.classList.add('hidden');
-      fileInput.value = '';
-      showToast('Falha na conexão durante o envio.', 'error');
-    };
-
-    xhr.send(formData);
+    }
   }
 
   // ================= RENDERIZAR PLAYLIST =================
@@ -317,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
-  function renderPlaylist(playlist) {
+  async function renderPlaylist(playlist) {
     playlistSummary.textContent = `${playlist.length} mídia(s) cadastrada(s)`;
 
     if (!playlist || playlist.length === 0) {
@@ -333,15 +400,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     playlistContainer.innerHTML = '';
 
-    playlist.forEach((item, index) => {
+    for (let index = 0; index < playlist.length; index++) {
+      const item = playlist[index];
       const card = document.createElement('div');
       card.className = `playlist-item bg-slate-950/80 border ${item.active ? 'border-slate-800' : 'border-slate-800/40 opacity-60'} rounded-xl p-3 flex items-center justify-between gap-3`;
       card.dataset.id = item.id;
 
-      const mediaUrl = `/uploads/${item.filename}`;
+      const mediaUrl = await getMediaSourceUrl(item);
       const isVideo = item.type === 'video';
 
-      // Thumbnail
       let thumbHtml = '';
       if (isVideo) {
         thumbHtml = `
@@ -389,17 +456,14 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
-          <!-- Botão Ativar/Desativar -->
-          <button data-id="${item.id}" data-active="${item.active}" class="btn-toggle-active p-2 rounded-lg ${item.active ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-500'} text-xs transition" title="${item.active ? 'Mídia ativa (clique para pausar)' : 'Mídia pausada (clique para ativar)'}">
+          <button data-id="${item.id}" data-active="${item.active}" class="btn-toggle-active p-2 rounded-lg ${item.active ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-500'} text-xs transition" title="${item.active ? 'Mídia ativa' : 'Mídia pausada'}">
             <i class="fa-solid ${item.active ? 'fa-eye' : 'fa-eye-slash'}"></i>
           </button>
 
-          <!-- Botão Visualizar Preview -->
           <button data-url="${mediaUrl}" data-type="${item.type}" data-title="${item.originalName}" class="btn-preview-media p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition" title="Visualizar mídia">
             <i class="fa-solid fa-magnifying-glass-plus"></i>
           </button>
 
-          <!-- Botão Deletar Mídia -->
           <button data-id="${item.id}" class="btn-delete-media p-2 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-rose-400 text-xs transition" title="Excluir mídia">
             <i class="fa-solid fa-trash-can"></i>
           </button>
@@ -407,24 +471,20 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
 
       playlistContainer.appendChild(card);
-    });
+    }
 
-    // Eventos dos botões da lista
+    // Configuração de eventos nos botões da lista
     document.querySelectorAll('.media-duration-input').forEach(input => {
       input.addEventListener('change', async (e) => {
         const mediaId = e.target.dataset.mediaId;
         const newDuration = Number(e.target.value);
         if (!newDuration || newDuration < 1) return;
 
-        try {
-          await fetch(`/api/screens/${currentScreen.code}/media/${mediaId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ duration: newDuration })
-          });
+        const found = currentScreen.playlist.find(m => m.id === mediaId);
+        if (found) {
+          found.duration = newDuration;
+          await window.DisplayStorage.saveScreen(currentScreen);
           showToast('Duração da imagem atualizada!');
-        } catch (err) {
-          showToast('Erro ao atualizar duração', 'error');
         }
       });
     });
@@ -434,15 +494,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaId = btn.dataset.id;
         const currentActive = btn.dataset.active === 'true';
 
-        try {
-          await fetch(`/api/screens/${currentScreen.code}/media/${mediaId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ active: !currentActive })
-          });
-          showToast(!currentActive ? 'Mídia ativada!' : 'Mídia pausada na exibição.');
-        } catch (err) {
-          showToast('Erro ao alternar status da mídia', 'error');
+        const found = currentScreen.playlist.find(m => m.id === mediaId);
+        if (found) {
+          found.active = !currentActive;
+          await window.DisplayStorage.saveScreen(currentScreen);
+          await renderPlaylist(currentScreen.playlist);
+          await updateMockupPreview(currentScreen);
+          showToast(!currentActive ? 'Mídia ativada!' : 'Mídia pausada.');
         }
       });
     });
@@ -452,18 +510,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaId = btn.dataset.id;
         if (!confirm('Deseja realmente remover esta mídia da tela?')) return;
 
-        try {
-          const res = await fetch(`/api/screens/${currentScreen.code}/media/${mediaId}`, {
-            method: 'DELETE'
-          });
-          const data = await res.json();
-          currentScreen.playlist = data.playlist;
-          renderPlaylist(currentScreen.playlist);
-          updateMockupPreview(currentScreen);
-          showToast('Mídia removida com sucesso!');
-        } catch (err) {
-          showToast('Erro ao remover mídia', 'error');
-        }
+        currentScreen.playlist = currentScreen.playlist.filter(m => m.id !== mediaId);
+        await window.DisplayStorage.saveScreen(currentScreen);
+        await renderPlaylist(currentScreen.playlist);
+        await updateMockupPreview(currentScreen);
+        showToast('Mídia removida com sucesso!');
       });
     });
 
@@ -478,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ================= ATUALIZAR MOCKUP PREVIEW =================
-  function updateMockupPreview(screen) {
+  async function updateMockupPreview(screen) {
     if (!screen || !screen.playlist || screen.playlist.length === 0) {
       mockupContent.innerHTML = `
         <div class="flex flex-col items-center justify-center text-center p-4">
@@ -490,9 +541,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Exibe o primeiro item ativo da playlist como preview
     const firstActive = screen.playlist.find(m => m.active) || screen.playlist[0];
-    const mediaUrl = `/uploads/${firstActive.filename}`;
+    const mediaUrl = await getMediaSourceUrl(firstActive);
     const fitClass = screen.fitMode === 'cover' ? 'object-cover' : 'object-contain';
 
     if (firstActive.type === 'video') {
@@ -546,20 +596,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // ================= MODAL QR CODE CELULAR =================
   function getNetworkHost() {
     const host = window.location.hostname;
-    // Se não for localhost ou 127.0.0.1, usa o próprio host de acesso
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
       return host;
     }
-    // IP padrão da máquina detectado na interface Wi-Fi
     return '192.168.40.162';
   }
 
   function openQrModal() {
     if (!currentScreen) return showToast('Selecione uma tela primeiro', 'error');
 
-    const host = getNetworkHost();
-    const port = window.location.port ? `:${window.location.port}` : ':3000';
-    const mobileUrl = `http://${host}${port}/player?code=${encodeURIComponent(currentScreen.code)}`;
+    let mobileUrl = '';
+    if (window.location.protocol === 'file:' || window.location.hostname.includes('github.io')) {
+      // URL do GitHub Pages ou local
+      const currentUrl = new URL(window.location.href);
+      currentUrl.pathname = currentUrl.pathname.replace(/\/index\.html$|\/$/, '') + '/player.html';
+      currentUrl.searchParams.set('code', currentScreen.code);
+      mobileUrl = currentUrl.toString();
+    } else {
+      const host = getNetworkHost();
+      const port = window.location.port ? `:${window.location.port}` : ':3000';
+      mobileUrl = `http://${host}${port}/player.html?code=${encodeURIComponent(currentScreen.code)}`;
+    }
 
     mobileUrlInput.value = mobileUrl;
     qrcodeContainer.innerHTML = '';
@@ -599,7 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ================= MODAL CRIAR NOVA TELA =================
+  // ================= CRIAR NOVA TELA =================
   btnNewScreen.addEventListener('click', () => {
     newScreenName.value = '';
     newScreenModal.classList.remove('hidden');
@@ -615,17 +672,11 @@ document.addEventListener('DOMContentLoaded', () => {
   btnCancelNewScreen.addEventListener('click', closeNewScreenModal);
 
   btnConfirmNewScreen.addEventListener('click', async () => {
-    const name = newScreenName.value.trim() || 'Nova Tela Signage';
+    const name = newScreenName.value.trim() || 'Nova Tela';
     const orientation = document.querySelector('input[name="newOrientation"]:checked')?.value || 'horizontal';
 
     try {
-      const res = await fetch('/api/screens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, orientation })
-      });
-      if (!res.ok) throw new Error('Falha ao criar tela');
-      const created = await res.json();
+      const created = await window.DisplayStorage.createScreen({ name, orientation });
       closeNewScreenModal();
       showToast(`Tela "${created.name}" criada com código ${created.code}!`);
       await loadScreens(created.code);
@@ -640,13 +691,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (screens.length <= 1) {
       return showToast('Você precisa manter pelo menos 1 tela cadastrada.', 'error');
     }
-    if (!confirm(`Tem certeza que deseja excluir a tela "${currentScreen.name}" (${currentScreen.code}) e todas as suas mídias?`)) {
+    if (!confirm(`Tem certeza que deseja excluir a tela "${currentScreen.name}" (${currentScreen.code})?`)) {
       return;
     }
 
     try {
-      const res = await fetch(`/api/screens/${currentScreen.code}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Falha ao excluir tela');
+      await window.DisplayStorage.deleteScreen(currentScreen.code);
       showToast('Tela excluída com sucesso.');
       await loadScreens();
     } catch (err) {
@@ -654,53 +704,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Botão de recarregar playlist
   btnRefreshPlaylist.addEventListener('click', async () => {
     if (!currentScreen) return;
     try {
-      const res = await fetch(`/api/screens/${currentScreen.code}`);
-      const data = await res.json();
+      const data = await window.DisplayStorage.getScreen(currentScreen.code);
       currentScreen = data;
-      renderPlaylist(data.playlist);
-      updateMockupPreview(data);
+      await renderPlaylist(data.playlist);
+      await updateMockupPreview(data);
       showToast('Playlist sincronizada!');
     } catch (e) {}
   });
 
-  // ================= SOCKET.IO: ATUALIZAÇÕES EM TEMPO REAL =================
-  socket.on('player-status-changed', (data) => {
-    if (currentScreen && data.code.toUpperCase() === currentScreen.code.toUpperCase()) {
-      if (data.status === 'online' && data.activeCount > 0) {
-        playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50';
-        playerStatusText.innerHTML = `<span class="text-emerald-400 font-semibold">ONLINE</span> (${data.activeCount} player conectado)`;
-      } else {
-        playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-slate-600';
-        playerStatusText.innerHTML = `<span class="text-slate-400">Aguardando Player...</span>`;
+  // ================= SINCRONIZAÇÃO EM TEMPO REAL =================
+  // 1. BroadcastChannel (mesmo navegador / abas diferentes)
+  if (window.DisplayStorage.localBroadcast) {
+    window.DisplayStorage.localBroadcast.onmessage = async (e) => {
+      const msg = e.data;
+      if (msg.type === 'screen-updated' && currentScreen && msg.screen.code === currentScreen.code) {
+        currentScreen = msg.screen;
+        await renderPlaylist(msg.screen.playlist);
+        await updateMockupPreview(msg.screen);
       }
-    }
-  });
+    };
+  }
 
-  socket.on('active-players-status', (statusMap) => {
-    if (currentScreen) {
-      const count = statusMap[currentScreen.code] || 0;
-      if (count > 0) {
-        playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50';
-        playerStatusText.innerHTML = `<span class="text-emerald-400 font-semibold">ONLINE</span> (${count} player conectado)`;
-      } else {
-        playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-slate-600';
-        playerStatusText.innerHTML = `<span class="text-slate-400">Aguardando Player...</span>`;
+  // 2. Socket.io (quando conectado ao servidor)
+  if (socket) {
+    socket.on('player-status-changed', (data) => {
+      if (currentScreen && data.code.toUpperCase() === currentScreen.code.toUpperCase()) {
+        if (data.status === 'online' && data.activeCount > 0) {
+          playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50';
+          playerStatusText.innerHTML = `<span class="text-emerald-400 font-semibold">ONLINE</span> (${data.activeCount} player conectado)`;
+        } else {
+          playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-slate-600';
+          playerStatusText.innerHTML = `<span class="text-slate-400">Aguardando Player...</span>`;
+        }
       }
-    }
-  });
+    });
 
-  socket.on('screen-updated', (updatedScreen) => {
-    if (currentScreen && updatedScreen.code.toUpperCase() === currentScreen.code.toUpperCase()) {
-      currentScreen = updatedScreen;
-      renderPlaylist(updatedScreen.playlist);
-      updateMockupPreview(updatedScreen);
-    }
-  });
+    socket.on('active-players-status', (statusMap) => {
+      if (currentScreen) {
+        const count = statusMap[currentScreen.code] || 0;
+        if (count > 0) {
+          playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50';
+          playerStatusText.innerHTML = `<span class="text-emerald-400 font-semibold">ONLINE</span> (${count} player conectado)`;
+        } else {
+          playerStatusDot.className = 'w-3.5 h-3.5 rounded-full bg-slate-600';
+          playerStatusText.innerHTML = `<span class="text-slate-400">Aguardando Player...</span>`;
+        }
+      }
+    });
 
-  // Inicializa
-  loadScreens();
+    socket.on('screen-updated', async (updatedScreen) => {
+      if (currentScreen && updatedScreen.code.toUpperCase() === currentScreen.code.toUpperCase()) {
+        currentScreen = updatedScreen;
+        await renderPlaylist(updatedScreen.playlist);
+        await updateMockupPreview(updatedScreen);
+      }
+    });
+  }
+
+  // Inicializa o painel
+  await loadScreens();
 });

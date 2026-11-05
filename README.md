@@ -172,6 +172,24 @@ flowchart TD
 
 ---
 
+### Opção 3: Publicação no GitHub Pages (100% Estático & Gratuito) 🌐
+
+A aplicação conta com arquitetura **Dual Mode**: funciona tanto em servidores Node.js/Docker quanto de forma 100% estática e *serverless* no **GitHub Pages**, utilizando **IndexedDB** para persistência no navegador e **BroadcastChannel** para sincronização em tempo real entre abas.
+
+#### Como ativar o GitHub Pages no seu repositório:
+
+1. No seu repositório no GitHub, clique na aba **Settings** (Configurações).
+2. No menu lateral esquerdo, clique em **Pages** (em *Code and automation*).
+3. Na seção **Build and deployment**:
+   * **Source:** Selecione **GitHub Actions** (o arquivo `.github/workflows/deploy-pages.yml` já está configurado para publicar automaticamente a cada push).
+   * *Ou, se preferir o modo clássico:* Selecione **Deploy from a branch**, escolha a branch **`main`** e a pasta **`/docs`**, e clique em **Save**.
+4. Aguarde cerca de 1 a 2 minutos e sua aplicação estará online no endereço:
+   ```
+   https://flaviohfranca.github.io/Gerenciador-de-Telas-M-dias/
+   ```
+
+---
+
 ## 📱 Acesso em Dispositivos Móveis e Smart TVs
 
 Para abrir o Player em celulares, tablets ou Smart TVs conectadas na mesma rede local:

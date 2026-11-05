@@ -1,6 +1,13 @@
-// Player Fullscreen ZappSignage (Rota 2)
+// Player Fullscreen Display Manager (Rota 2)
 document.addEventListener('DOMContentLoaded', () => {
-  const socket = io();
+  let socket = null;
+  try {
+    if (typeof io !== 'undefined' && !window.DisplayStorage?.isGitHubPages) {
+      socket = io({ credentials: false, autoConnect: true });
+    }
+  } catch (e) {
+    console.warn('Socket.io não conectado; utilizando modo de armazenamento cliente/GitHub Pages.');
+  }
 
   // Elementos do DOM
   const pairingScreen = document.getElementById('pairingScreen');
@@ -40,18 +47,37 @@ document.addEventListener('DOMContentLoaded', () => {
   let activePlaylist = [];
   let currentIndex = 0;
   let isPaused = false;
-  let isMuted = true; // Por padrão mudo para garantir autoplay imediato em todos os navegadores
-  let currentLayer = 'A'; // 'A' ou 'B'
+  let isMuted = true;
+  let currentLayer = 'A';
   let mediaTimer = null;
   let progressInterval = null;
   let hideControlsTimeout = null;
+
+  // Cache de ObjectURLs locais
+  const objectUrlCache = new Map();
+
+  async function getMediaSourceUrl(media) {
+    if (media.dataUrl) return media.dataUrl;
+    if (media.blobUrl) return media.blobUrl;
+    if (objectUrlCache.has(media.id)) return objectUrlCache.get(media.id);
+
+    if (window.DisplayStorage) {
+      const blob = await window.DisplayStorage.getMediaBlob(media.id);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        objectUrlCache.set(media.id, url);
+        return url;
+      }
+    }
+
+    return `./uploads/${media.filename}`;
+  }
 
   // ================= CONTROLE DE URL E CÓDIGO =================
   function getCodeFromUrl() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('code')) return params.get('code').toUpperCase().trim();
 
-    // Ou /player/CODE
     const parts = window.location.pathname.split('/').filter(Boolean);
     if (parts.length >= 2 && parts[0] === 'player') {
       return decodeURIComponent(parts[1]).toUpperCase().trim();
@@ -59,8 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
-  // Tenta auto-conectar caso venha na URL ou no localStorage
-  const urlCode = getCodeFromUrl() || localStorage.getItem('zapp_last_screen_code');
+  const urlCode = getCodeFromUrl() || localStorage.getItem('display_last_screen_code') || localStorage.getItem('zapp_last_screen_code');
   if (urlCode) {
     inputScreenCode.value = urlCode;
     connectToScreen(urlCode);
@@ -83,16 +108,13 @@ document.addEventListener('DOMContentLoaded', () => {
   async function connectToScreen(code) {
     pairingError.classList.add('hidden');
     try {
-      const res = await fetch(`/api/screens/${encodeURIComponent(code)}`);
-      if (!res.ok) {
-        throw new Error('Código de tela inválido ou não encontrado.');
-      }
-      const screenData = await res.json();
-      localStorage.setItem('zapp_last_screen_code', screenData.code);
+      const screenData = await window.DisplayStorage.getScreen(code);
+      localStorage.setItem('display_last_screen_code', screenData.code);
       initPlayer(screenData);
 
-      // Entra na sala socket da tela
-      socket.emit('join-screen', screenData.code);
+      if (socket && socket.connected) {
+        socket.emit('join-screen', screenData.code);
+      }
     } catch (err) {
       pairingError.textContent = err.message || 'Erro ao conectar à tela.';
       pairingError.classList.remove('hidden');
@@ -104,15 +126,12 @@ document.addEventListener('DOMContentLoaded', () => {
     currentScreen = screenData;
     pairingScreen.classList.add('hidden');
 
-    // Atualiza controles
     controlScreenName.textContent = screenData.name || 'Tela Signage';
     controlScreenCode.textContent = screenData.code;
     controlScreenOrient.textContent = screenData.orientation === 'vertical' ? '9:16 Vertical' : '16:9 Horizontal';
 
-    // Ajusta classes de orientação e fit
     applyScreenStyles(screenData);
 
-    // Filtra mídias ativas
     activePlaylist = (screenData.playlist || []).filter(item => item.active !== false);
 
     if (activePlaylist.length === 0) {
@@ -127,7 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function applyScreenStyles(screenData) {
-    // Modo de preenchimento
     if (screenData.fitMode === 'cover') {
       signageViewport.classList.add('cover-mode');
       signageViewport.classList.remove('contain-mode');
@@ -136,7 +154,6 @@ document.addEventListener('DOMContentLoaded', () => {
       signageViewport.classList.remove('cover-mode');
     }
 
-    // Orientação
     if (screenData.orientation === 'vertical') {
       document.body.classList.add('orientation-vertical');
       document.body.classList.remove('orientation-horizontal');
@@ -162,13 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ================= MÁQUINA DE REPRODUÇÃO =================
-  function playCurrentMedia() {
+  async function playCurrentMedia() {
     if (activePlaylist.length === 0) {
       showEmptyScreen();
       return;
     }
 
-    // Garante índice válido
     if (currentIndex >= activePlaylist.length) currentIndex = 0;
     if (currentIndex < 0) currentIndex = activePlaylist.length - 1;
 
@@ -180,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaProgressBar.style.width = '0%';
     mediaLoader.classList.remove('hidden');
 
-    const mediaUrl = `/uploads/${media.filename}`;
+    const mediaUrl = await getMediaSourceUrl(media);
 
     if (media.type === 'video') {
       const video = document.createElement('video');
@@ -192,18 +208,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       video.onloadeddata = () => {
         mediaLoader.classList.add('hidden');
-        // Alterna camadas (crossfade)
         targetLayer.innerHTML = '';
         targetLayer.appendChild(video);
         targetLayer.classList.add('active');
         oldLayer.classList.remove('active');
         currentLayer = currentLayer === 'A' ? 'B' : 'A';
 
-        // Tenta reproduzir vídeo
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise.catch(() => {
-            // Se autoplay com som foi bloqueado, muta e retenta
             video.muted = true;
             isMuted = true;
             updateSoundIcon();
@@ -213,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         }
 
-        // Progresso do vídeo
         video.ontimeupdate = () => {
           if (video.duration) {
             const pct = (video.currentTime / video.duration) * 100;
@@ -221,12 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         };
 
-        // Quando o vídeo termina, vai para a próxima mídia da lista
         video.onended = () => {
           nextMedia();
         };
 
-        // Em caso de erro de playback no vídeo, pula em 3 segundos para não travar a tela
         video.onerror = () => {
           console.error('Erro ao reproduzir vídeo:', media.originalName);
           setTimeout(nextMedia, 2000);
@@ -234,7 +244,6 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
     } else {
-      // É uma imagem
       const img = new Image();
       img.src = mediaUrl;
       img.onload = () => {
@@ -245,12 +254,10 @@ document.addEventListener('DOMContentLoaded', () => {
         oldLayer.classList.remove('active');
         currentLayer = currentLayer === 'A' ? 'B' : 'A';
 
-        // Duração da imagem em segundos
         const durationSec = Number(media.duration) || Number(currentScreen.defaultImageDuration) || 10;
         const durationMs = durationSec * 1000;
         const startTime = Date.now();
 
-        // Barra de progresso animada
         progressInterval = setInterval(() => {
           if (!isPaused) {
             const elapsed = Date.now() - startTime;
@@ -287,7 +294,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function clearTimers() {
     if (mediaTimer) clearTimeout(mediaTimer);
     if (progressInterval) clearInterval(progressInterval);
-    // Para vídeos tocando na camada antiga
     [layerA, layerB].forEach(layer => {
       const v = layer.querySelector('video');
       if (v) {
@@ -313,7 +319,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Som / Áudio
   btnToggleSound.addEventListener('click', () => {
     isMuted = !isMuted;
     updateSoundIcon();
@@ -344,7 +349,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Alternar Tela Cheia (Fullscreen)
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(err => {
@@ -369,10 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Duplo clique na tela ativa Fullscreen
   signageViewport.addEventListener('dblclick', toggleFullscreen);
 
-  // Atalhos de teclado
   document.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'f') {
       toggleFullscreen();
@@ -383,16 +385,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Desconectar tela
   btnDisconnect.addEventListener('click', () => {
     clearTimers();
+    localStorage.removeItem('display_last_screen_code');
     localStorage.removeItem('zapp_last_screen_code');
     currentScreen = null;
     activePlaylist = [];
     pairingScreen.classList.remove('hidden');
   });
 
-  // ================= OCULTAÇÃO AUTOMÁTICA DOS CONTROLES =================
   function showControls() {
     document.body.classList.remove('hide-cursor');
     playerControlBar.style.opacity = '1';
@@ -412,13 +413,38 @@ document.addEventListener('DOMContentLoaded', () => {
     showControls();
   }
 
-  // ================= SOCKET.IO: ATUALIZAÇÃO EM TEMPO REAL =================
-  socket.on('screen-updated', (updatedScreen) => {
-    if (!currentScreen || updatedScreen.code.toUpperCase() !== currentScreen.code.toUpperCase()) {
-      return;
-    }
+  // ================= SINCRONIZAÇÃO EM TEMPO REAL =================
+  // 1. BroadcastChannel (mesmo navegador / abas)
+  if (window.DisplayStorage?.localBroadcast) {
+    window.DisplayStorage.localBroadcast.onmessage = (e) => {
+      const msg = e.data;
+      if (msg.type === 'screen-updated' && currentScreen && msg.screen.code.toUpperCase() === currentScreen.code.toUpperCase()) {
+        updateScreenFromEvent(msg.screen);
+      }
+    };
+  }
 
-    console.log('🔄 Tela atualizada em tempo real via Painel!', updatedScreen);
+  // 2. Socket.io (servidor)
+  if (socket) {
+    socket.on('screen-updated', (updatedScreen) => {
+      if (currentScreen && updatedScreen.code.toUpperCase() === currentScreen.code.toUpperCase()) {
+        updateScreenFromEvent(updatedScreen);
+      }
+    });
+
+    socket.on('screen-deleted', (data) => {
+      if (currentScreen && data.code.toUpperCase() === currentScreen.code.toUpperCase()) {
+        alert('Esta tela foi removida no painel administrativo.');
+        window.location.reload();
+      }
+    });
+
+    socket.on('screen-init', (screen) => {
+      initPlayer(screen);
+    });
+  }
+
+  function updateScreenFromEvent(updatedScreen) {
     currentScreen = updatedScreen;
     controlScreenName.textContent = updatedScreen.name;
     controlScreenOrient.textContent = updatedScreen.orientation === 'vertical' ? '9:16 Vertical' : '16:9 Horizontal';
@@ -431,22 +457,10 @@ document.addEventListener('DOMContentLoaded', () => {
       showEmptyScreen();
     } else {
       hideEmptyScreen();
-      // Se estava vazia e recebeu mídias, ou se o item atual foi removido
       if (prevCount === 0 || currentIndex >= activePlaylist.length) {
         currentIndex = 0;
         playCurrentMedia();
       }
     }
-  });
-
-  socket.on('screen-deleted', (data) => {
-    if (currentScreen && data.code.toUpperCase() === currentScreen.code.toUpperCase()) {
-      alert('Esta tela foi removida no painel administrativo.');
-      window.location.reload();
-    }
-  });
-
-  socket.on('screen-init', (screen) => {
-    initPlayer(screen);
-  });
+  }
 });
