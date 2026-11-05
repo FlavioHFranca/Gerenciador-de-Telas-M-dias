@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZappSignage - Painel de Controle & Upload</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- QR Code Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+
+<body
+  class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div
+          class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-display text-white text-lg"></i>
+        </div>
+        <div>
+          <!-- <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            ZappSignage
+            <span
+              class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Rota
+              1: Painel</span>
+          </h1> -->
+          <p class="text-xs text-slate-400">Gerenciador de Telas & Mídias</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Botão direto para a Rota 2: Player -->
+        <a id="btnOpenPlayerNav" href="/player" target="_blank"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium border border-slate-700 transition shadow-sm hover:border-slate-600">
+          <i class="fa-solid fa-play text-indigo-400"></i>
+          <span>Abrir Rota 2 (Player)</span>
+          <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+    <!-- Top Alert / Status Banner -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <!-- Card: Seletor e Código da Tela Ativa -->
+      <div
+        class="md:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
+        <div class="absolute -right-8 -top-8 w-44 h-44 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none">
+        </div>
+
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            <div class="flex items-center gap-3">
+              <label for="screenSelect" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Selecionar
+                Tela:</label>
+              <select id="screenSelect"
+                class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <!-- Preenchido via JS -->
+              </select>
+            </div>
+
+            <button id="btnNewScreen"
+              class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-plus"></i> Nova Tela
+            </button>
+          </div>
+
+          <!-- Código de Conexão em Destaque -->
+          <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+            <div>
+              <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-key"></i> Código para Conectar no Player
+              </span>
+              <div class="mt-2 flex items-center gap-3">
+                <span id="currentScreenCode"
+                  class="text-3xl sm:text-4xl font-mono font-black tracking-widest text-white bg-slate-950 px-4 py-2 rounded-xl border border-indigo-500/40 shadow-inner">
+                  ------
+                </span>
+                <button id="btnCopyCode" title="Copiar Código"
+                  class="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition">
+                  <i class="fa-solid fa-copy text-lg"></i>
+                </button>
+              </div>
+              <p class="text-xs text-slate-400 mt-2">
+                Insira este código na <strong>Rota 2 (Player)</strong> para sincronizar instantaneamente.
+              </p>
+            </div>
+
+            <!-- Status do Player em Tempo Real -->
+            <div class="bg-slate-950/80 rounded-xl p-4 border border-slate-800 flex flex-col justify-center">
+              <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Status do Player:</span>
+              <div class="flex items-center gap-2.5">
+                <span id="playerStatusDot" class="w-3.5 h-3.5 rounded-full bg-slate-600 animate-pulse"></span>
+                <span id="playerStatusText" class="text-sm font-semibold text-slate-300">Verificando...</span>
+              </div>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <a id="btnDirectPlayerLink" href="#" target="_blank"
+                  class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                  <span>Conectar player automaticamente via link</span>
+                  <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
+                <button id="btnOpenQrModal" type="button"
+                  class="text-xs px-2.5 py-1 rounded-md bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-medium flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-qrcode"></i> <span>Abrir no Celular (QR Code)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rodapé do Card: Nome da Tela editável -->
+        <div
+          class="mt-5 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+          <div class="flex items-center gap-2">
+            <span>Nome da Tela:</span>
+            <input id="screenNameInput" type="text"
+              class="bg-slate-800 border border-slate-700 rounded px-2.5 py-1 text-white text-xs focus:ring-1 focus:ring-indigo-500"
+              value="">
+            <button id="btnSaveScreenName"
+              class="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white font-medium transition">Salvar</button>
+          </div>
+          <button id="btnDeleteScreen" class="text-red-400 hover:text-red-300 flex items-center gap-1 transition">
+            <i class="fa-solid fa-trash-can text-xs"></i> Excluir esta tela
+          </button>
+        </div>
+      </div>
+
+      <!-- Card: Orientação e Ajuste da Tela -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
+            <i class="fa-solid fa-arrows-spin text-indigo-400"></i> Orientação da Tela
+          </h2>
+
+          <!-- Seletor Horizontal vs Vertical -->
+          <div class="grid grid-cols-2 gap-3 mb-4">
+
+            <!-- Opção Horizontal -->
+            <button id="btnOrientHorizontal" type="button"
+              class="orient-btn relative p-3 rounded-xl border border-slate-700 bg-slate-800/60 hover:border-indigo-500 flex flex-col items-center gap-2 text-center transition">
+              <div
+                class="w-12 h-7 rounded border-2 border-indigo-400 bg-indigo-500/20 flex items-center justify-center">
+                <i class="fa-solid fa-tv text-xs text-indigo-300"></i>
+              </div>
+              <span class="text-xs font-semibold text-white">Horizontal</span>
+              <span class="text-[10px] text-slate-400 font-mono">1920 × 1080 (16:9)</span>
+              <span class="orient-check hidden absolute top-1 right-1.5 text-indigo-400 text-xs">
+                <i class="fa-solid fa-circle-check"></i>
+              </span>
+            </button>
+
+            <!-- Opção Vertical -->
+            <button id="btnOrientVertical" type="button"
+              class="orient-btn relative p-3 rounded-xl border border-slate-700 bg-slate-800/60 hover:border-indigo-500 flex flex-col items-center gap-2 text-center transition">
+              <div
+                class="w-7 h-12 rounded border-2 border-indigo-400 bg-indigo-500/20 flex items-center justify-center">
+                <i class="fa-solid fa-mobile-screen text-xs text-indigo-300"></i>
+              </div>
+              <span class="text-xs font-semibold text-white">Vertical</span>
+              <span class="text-[10px] text-slate-400 font-mono">1080 × 1920 (9:16)</span>
+              <span class="orient-check hidden absolute top-1 right-1.5 text-indigo-400 text-xs">
+                <i class="fa-solid fa-circle-check"></i>
+              </span>
+            </button>
+          </div>
+
+          <!-- Ajuste de Escala da Mídia -->
+          <div class="space-y-3 pt-2">
+            <div>
+              <label for="fitModeSelect" class="block text-xs font-medium text-slate-400 mb-1">Preenchimento no
+                Player:</label>
+              <select id="fitModeSelect"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+                <option value="contain">Conter (Contain) - Exibe mídia inteira sem cortar</option>
+                <option value="cover">Cobrir (Cover) - Preenche tela inteira sem bordas pretas</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="defaultDurationInput" class="block text-xs font-medium text-slate-400 mb-1">Tempo padrão para
+                Imagens (segundos):</label>
+              <input id="defaultDurationInput" type="number" min="2" max="300" value="10"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        </div>
+
+        <button id="btnSaveConfig"
+          class="mt-4 w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
+          <i class="fa-solid fa-floppy-disk"></i> Salvar Orientação e Configurações
+        </button>
+      </div>
+    </div>
+
+    <!-- Seção de Upload de Mídias -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-cloud-arrow-up text-indigo-400"></i> Fazer Upload de Vídeos e Imagens
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Formatos de vídeo (<code class="text-indigo-300">.mp4, .webm, .mov, .ogg</code>) e imagens (<code
+              class="text-indigo-300">.jpg, .jpeg, .png, .webp, .gif</code>).
+          </p>
+        </div>
+
+        <!-- Duração para as fotos que serão enviadas -->
+        <div class="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
+          <label for="uploadImageDuration" class="text-xs text-slate-300 whitespace-nowrap">Tempo por imagem:</label>
+          <input id="uploadImageDuration" type="number" min="2" max="180" value="10"
+            class="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-center text-xs text-white">
+          <span class="text-xs text-slate-400">seg</span>
+        </div>
+      </div>
+
+      <!-- Drag & Drop Zone -->
+      <div id="dropZone"
+        class="border-2 border-dashed border-slate-700 hover:border-indigo-500 bg-slate-950/60 rounded-xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center group">
+        <input type="file" id="fileInput" multiple
+          accept="image/*,video/*,.mp4,.webm,.ogg,.mov,.jpg,.jpeg,.png,.webp,.gif,.svg" class="hidden">
+        <div
+          class="w-16 h-16 rounded-full bg-slate-800 group-hover:bg-indigo-500/20 flex items-center justify-center transition mb-3">
+          <i class="fa-solid fa-file-arrow-up text-2xl text-slate-400 group-hover:text-indigo-400 transition"></i>
+        </div>
+        <p class="text-sm font-semibold text-slate-200">
+          Arraste e solte vídeos ou imagens aqui, ou <span class="text-indigo-400 underline">clique para
+            selecionar</span>
+        </p>
+        <p class="text-xs text-slate-500 mt-1">Suporta envio múltiplo de arquivos ao mesmo tempo (Vertical ou
+          Horizontal)</p>
+      </div>
+
+      <!-- Barra de Progresso de Upload -->
+      <div id="uploadProgressContainer" class="hidden mt-4">
+        <div class="flex items-center justify-between text-xs text-slate-300 mb-1">
+          <span id="uploadProgressText">Enviando arquivos...</span>
+          <span id="uploadProgressPercent">0%</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+          <div id="uploadProgressBar" class="bg-indigo-500 h-2.5 rounded-full transition-all duration-200 w-0"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção de Gerenciamento da Playlist & Pré-Visualização -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Lista de Mídias (2 Colunas) -->
+      <div class="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-list-check text-indigo-400"></i> Playlist da Tela
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5" id="playlistSummary">0 mídias cadastradas</p>
+          </div>
+          <button id="btnRefreshPlaylist"
+            class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-rotate-right"></i> Atualizar
+          </button>
+        </div>
+
+        <!-- Container de Itens da Playlist -->
+        <div id="playlistContainer" class="space-y-3 max-h-[560px] overflow-y-auto pr-1">
+          <!-- Gerado dinamicamente -->
+          <div class="text-center py-12 text-slate-500">
+            <i class="fa-regular fa-folder-open text-4xl mb-3 opacity-40"></i>
+            <p class="text-sm">Nenhuma mídia adicionada ainda.</p>
+            <p class="text-xs text-slate-600 mt-1">Faça upload de vídeos ou fotos acima para começar.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulador de Mockup da Tela ao Vivo (1 Coluna) -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col items-center">
+        <div class="w-full flex items-center justify-between mb-4">
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-eye text-indigo-400"></i> Simulador de Proporção
+          </h2>
+          <span id="previewAspectBadge"
+            class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">16:9
+            Horizontal</span>
+        </div>
+
+        <!-- Frame do Monitor / Totem -->
+        <div class="w-full flex-1 flex items-center justify-center p-3">
+          <div id="mockupFrame"
+            class="mockup-horizontal bg-slate-950 border-4 border-slate-800 rounded-xl shadow-2xl relative overflow-hidden flex items-center justify-center transition-all duration-300">
+            <div id="mockupContent" class="w-full h-full flex flex-col items-center justify-center text-center p-4">
+              <i class="fa-solid fa-circle-play text-3xl text-indigo-500/40 mb-2"></i>
+              <span class="text-xs font-semibold text-slate-400">Prévia da Tela</span>
+              <span id="mockupScreenLabel" class="text-[10px] text-slate-600 font-mono mt-1">1920 × 1080</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="w-full mt-4 pt-4 border-t border-slate-800 text-center">
+          <a id="btnTestInPlayer" href="/player" target="_blank"
+            class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-xs flex items-center justify-center gap-2 transition shadow-lg shadow-indigo-600/30">
+            <i class="fa-solid fa-expand"></i> Abrir Player Fullscreen Desta Tela
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Modal Conectar pelo Celular (QR Code) -->
+  <div id="qrModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 text-left">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-mobile-screen text-indigo-400"></i> Conectar pelo Celular / TV
+        </h3>
+        <button id="btnCloseQrModal" class="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400">
+        Aponte a câmera do seu celular para o QR Code abaixo para abrir a <strong>Rota 2 (Player)</strong> sincronizada com esta tela:
+      </p>
+
+      <!-- Container do QR Code -->
+      <div class="flex justify-center my-4">
+        <div id="qrcode" class="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center min-w-[200px] min-h-[200px]">
+          <!-- Gerado via qrcodejs -->
+        </div>
+      </div>
+
+      <!-- Link Direto e IP -->
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-left space-y-2">
+        <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Endereço na Rede Wi-Fi:</label>
+        <div class="flex items-center gap-2">
+          <input id="mobileUrlInput" type="text" readonly class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-indigo-300 select-all">
+          <button id="btnCopyMobileUrl" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition" title="Copiar Link">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Alerta de Firewall -->
+      <div class="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-left">
+        <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+        <strong>Não carregou no celular?</strong>
+        <p class="mt-1 text-slate-400">
+          O Firewall do Windows pode estar bloqueando a porta 3000. Dê um clique duplo com o botão direito no arquivo 
+          <code class="text-white bg-slate-800 px-1 py-0.5 rounded">liberar-firewall-porta-3000.bat</code> na pasta do projeto e escolha <em>"Executar como Administrador"</em>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Visualização de Mídia (Preview) -->
+  <div id="previewModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <h3 id="previewModalTitle" class="text-sm font-bold text-white truncate max-w-md">Pré-visualização</h3>
+        <button id="btnClosePreviewModal"
+          class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+      <div id="previewModalBody" class="p-4 flex items-center justify-center min-h-[300px] max-h-[70vh] bg-black">
+        <!-- Inserido dinamicamente img ou video -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Criar Nova Tela -->
+  <div id="newScreenModal"
+    class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-plus-circle text-indigo-400"></i> Criar Nova Tela
+        </h3>
+        <button id="btnCloseNewScreenModal"
+          class="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label for="newScreenName" class="block text-xs font-medium text-slate-400 mb-1">Nome da Tela:</label>
+          <input id="newScreenName" type="text" placeholder="Ex: Totem Entrada, TV Recepção"
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Orientação:</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="cursor-pointer">
+              <input type="radio" name="newOrientation" value="horizontal" checked class="peer hidden">
+              <div
+                class="p-3 rounded-xl border border-slate-700 bg-slate-800 peer-checked:border-indigo-500 peer-checked:bg-indigo-600/10 text-center">
+                <i class="fa-solid fa-tv block mb-1 text-slate-300"></i>
+                <span class="text-xs font-semibold text-white">Horizontal</span>
+                <span class="block text-[10px] text-slate-400">1920x1080</span>
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="newOrientation" value="vertical" class="peer hidden">
+              <div
+                class="p-3 rounded-xl border border-slate-700 bg-slate-800 peer-checked:border-indigo-500 peer-checked:bg-indigo-600/10 text-center">
+                <i class="fa-solid fa-mobile-screen block mb-1 text-slate-300"></i>
+                <span class="text-xs font-semibold text-white">Vertical</span>
+                <span class="block text-[10px] text-slate-400">1080x1920</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 flex items-center justify-end gap-3">
+        <button id="btnCancelNewScreen"
+          class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">Cancelar</button>
+        <button id="btnConfirmNewScreen"
+          class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">Criar
+          Tela</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast de Notificações -->
+  <div id="toast"
+    class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toastMsg">Notificação</span>
+  </div>
+
+  <script src="/js/admin.js"></script>
+</body>
+
+</html>

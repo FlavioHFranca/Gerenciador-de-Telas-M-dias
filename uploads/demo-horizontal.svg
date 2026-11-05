@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="gradH" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#31104b" />
+    </linearGradient>
+    <linearGradient id="accentH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#gradH)" />
+  <circle cx="960" cy="540" r="420" fill="#6366f1" opacity="0.12" />
+  <circle cx="1600" cy="200" r="260" fill="#a855f7" opacity="0.15" />
+  
+  <rect x="260" y="220" width="1400" height="640" rx="40" fill="rgba(15, 23, 42, 0.75)" stroke="#6366f1" stroke-width="3" />
+  
+  <text x="960" y="380" font-family="system-ui, -apple-system, sans-serif" font-size="64" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="2">
+    ZAPPSIGNAGE • DIGITAL SIGNAGE
+  </text>
+  <text x="960" y="470" font-family="system-ui, -apple-system, sans-serif" font-size="44" font-weight="700" fill="url(#accentH)" text-anchor="middle">
+    FORMATO HORIZONTAL — 1920 × 1080 (16:9)
+  </text>
+  <text x="960" y="550" font-family="system-ui, -apple-system, sans-serif" font-size="30" fill="#94a3b8" text-anchor="middle">
+    Ideal para TVs, Monitores Comerciais, Vitrines e Telões
+  </text>
+  
+  <rect x="760" y="620" width="400" height="80" rx="20" fill="url(#accentH)" />
+  <text x="960" y="675" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">
+    REPRODUÇÃO FULLSCREEN
+  </text>
+  
+  <text x="960" y="780" font-family="monospace" font-size="24" fill="#64748b" text-anchor="middle">
+    Conectado via Socket.io • Atualização Instantânea em Tempo Real
+  </text>
+</svg>

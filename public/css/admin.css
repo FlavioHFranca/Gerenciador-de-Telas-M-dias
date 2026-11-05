@@ -1,0 +1,45 @@
+/* Estilos Específicos do Painel Admin */
+.mockup-horizontal {
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 16 / 9;
+}
+
+.mockup-vertical {
+  width: 100%;
+  max-width: 200px;
+  aspect-ratio: 9 / 16;
+}
+
+.orient-btn.active {
+  border-color: #6366f1 !important;
+  background-color: rgba(99, 102, 241, 0.12) !important;
+}
+
+.orient-btn.active .orient-check {
+  display: block !important;
+}
+
+/* Scrollbar customizada */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* Transições suaves */
+.playlist-item {
+  transition: transform 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+.playlist-item:hover {
+  transform: translateY(-2px);
+}

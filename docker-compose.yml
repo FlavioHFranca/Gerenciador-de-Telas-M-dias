@@ -1,0 +1,17 @@
+services:
+  zappsignage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zappsignage
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persiste uploads de vídeos/imagens e configurações de telas no host
+      - ./uploads:/app/uploads
+      - ./data:/app/data
+      - ./public:/app/public
+    environment:
+      - PORT=3000
+      - NODE_ENV=production

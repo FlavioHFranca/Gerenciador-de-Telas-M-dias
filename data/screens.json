@@ -1,0 +1,120 @@
+{
+  "screens": [
+    {
+      "id": "screen_default",
+      "code": "SIGN-1080",
+      "name": "Painel Principal (Exemplo)",
+      "orientation": "vertical",
+      "fitMode": "contain",
+      "defaultImageDuration": 8,
+      "createdAt": "2026-11-04T20:19:35.816Z",
+      "playlist": [
+        {
+          "id": "media_sample_1",
+          "filename": "demo-horizontal.svg",
+          "originalName": "demo-horizontal-1920x1080.svg",
+          "type": "image",
+          "mimeType": "image/svg+xml",
+          "size": 1938,
+          "duration": 8,
+          "order": 0,
+          "active": true,
+          "createdAt": "2026-11-04T20:19:35.818Z"
+        },
+        {
+          "id": "media_sample_2",
+          "filename": "demo-vertical.svg",
+          "originalName": "demo-vertical-1080x1920.svg",
+          "type": "image",
+          "mimeType": "image/svg+xml",
+          "size": 2387,
+          "duration": 8,
+          "order": 1,
+          "active": false,
+          "createdAt": "2026-11-04T20:19:35.818Z"
+        }
+      ]
+    },
+    {
+      "id": "screen_1793892831586",
+      "code": "ZP-7PHN",
+      "name": "TOTEM-PRETO-SUPERMIX",
+      "orientation": "vertical",
+      "fitMode": "contain",
+      "defaultImageDuration": 10,
+      "createdAt": "2026-11-05T15:33:51.589Z",
+      "playlist": [
+        {
+          "id": "media_1793892869237_776",
+          "filename": "1793892868365-297295580.mp4",
+          "originalName": "padaria-supermix.mp4",
+          "type": "video",
+          "mimeType": "video/mp4",
+          "size": 12283933,
+          "duration": 0,
+          "order": 0,
+          "active": true,
+          "createdAt": "2026-11-05T15:34:29.237Z"
+        }
+      ]
+    },
+    {
+      "id": "screen_1793892902021",
+      "code": "ZP-NJ5K",
+      "name": "TOTEM-PRETO-NATO",
+      "orientation": "horizontal",
+      "fitMode": "cover",
+      "defaultImageDuration": 10,
+      "createdAt": "2026-11-05T15:35:02.021Z",
+      "playlist": [
+        {
+          "id": "media_1793893005748_2283",
+          "filename": "1793893005120-667897490.mp4",
+          "originalName": "padaria-supermix.mp4",
+          "type": "video",
+          "mimeType": "video/mp4",
+          "size": 12283933,
+          "duration": 0,
+          "order": 0,
+          "active": true,
+          "createdAt": "2026-11-05T15:36:45.748Z"
+        },
+        {
+          "id": "media_1793893026763_9715",
+          "filename": "1793893017501-461222160.mp4",
+          "originalName": "zappcom-supermix.mp4",
+          "type": "video",
+          "mimeType": "video/mp4",
+          "size": 175217320,
+          "duration": 0,
+          "order": 1,
+          "active": true,
+          "createdAt": "2026-11-05T15:37:06.763Z"
+        }
+      ]
+    },
+    {
+      "id": "screen_1793893141974",
+      "code": "ZP-FHVF",
+      "name": "zappcom",
+      "orientation": "vertical",
+      "fitMode": "cover",
+      "defaultImageDuration": 10,
+      "createdAt": "2026-11-05T15:39:01.974Z",
+      "playlist": [
+        {
+          "id": "media_1793893177371_8085",
+          "filename": "1793893169767-46026792.mp4",
+          "originalName": "zappcom-supermix.mp4",
+          "type": "video",
+          "mimeType": "video/mp4",
+          "size": 175217320,
+          "duration": 0,
+          "order": 0,
+          "active": false,
+          "createdAt": "2026-11-05T15:39:37.371Z"
+        }
+      ]
+    }
+  ]
+}
